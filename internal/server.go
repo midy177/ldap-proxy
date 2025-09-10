@@ -27,6 +27,7 @@ type Server struct {
 }
 
 func newServer(cp *ClientPool, sanr *SwapAttributeNameRule, user, pass string) *Server {
+	log.Printf("LDAP servUser %s servPass %s\n", user, pass)
 	return &Server{
 		Username:   user,
 		Password:   pass,

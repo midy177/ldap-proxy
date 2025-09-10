@@ -2,6 +2,7 @@ package internal
 
 import (
 	"crypto/tls"
+	"log"
 	"strings"
 
 	"github.com/go-ldap/ldap/v3"
@@ -14,6 +15,7 @@ type ClientPool struct {
 }
 
 func NewClientPool(ldapURL, bindDN, bindPassword string, skipTls bool, size int) *ClientPool {
+	log.Printf("Connecting to %s bindDN %s bindPassword %s\n", ldapURL, bindDN, bindPassword)
 	return &ClientPool{
 		ldapURL:      ldapURL,
 		bindDN:       bindDN,
