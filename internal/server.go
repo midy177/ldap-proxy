@@ -103,6 +103,8 @@ func (s *Server) Search(boundDN string, req ldapserver.SearchRequest, conn net.C
 	// 4) 执行上游查询
 	resp, err := cc.Search(v3req)
 	if err != nil {
+		log.Printf("Search Error: %v\n", err)
+		log.Println(req.BaseDN)
 		return ldapserver.ServerSearchResult{
 			ResultCode: ldapserver.LDAPResultOperationsError,
 		}, err
