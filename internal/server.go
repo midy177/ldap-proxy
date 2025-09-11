@@ -156,6 +156,9 @@ func (s *Server) Search(boundDN string, req ldapserver.SearchRequest, conn net.C
 	// 跳过 LDAP bug
 	re := regexp.MustCompile(`^\(&\(objectClass=posixAccount\)\(\|(uid=[^()]+|mobile=[^()]+|mail=[^()]+|sAMAccountName=[^()]+)+\)\)$`)
 	onlyOne := re.MatchString(req.Filter)
+	if GetRunMode() {
+		log.Printf("Search Result Entries lens: %v\n", len(resp.Entries))
+	}
 	for _, e := range resp.Entries {
 		entry := &ldapserver.Entry{
 			DN: e.DN,
@@ -181,8 +184,5 @@ func (s *Server) Search(boundDN string, req ldapserver.SearchRequest, conn net.C
 		}
 	}
 
-	if GetRunMode() {
-		log.Printf("Search Result Entries lens: %v\n", len(out.Entries))
-	}
 	return out, nil
 }
