@@ -45,6 +45,7 @@ func newServer(cp *ClientPool, sanr *SwapAttributeNameRule, user, pass, appendAt
 // Bind 接口：验证简单用户名/密码
 func (s *Server) Bind(bindDN, bindSimplePw string, conn net.Conn) (ldapserver.LDAPResultCode, error) {
 	if bindDN == s.Username && bindSimplePw == s.Password {
+		log.Printf("LDAP User %s is authorized\n", s.Username)
 		return ldapserver.LDAPResultSuccess, nil
 	}
 	// 1) 取上游连接
@@ -61,6 +62,7 @@ func (s *Server) Bind(bindDN, bindSimplePw string, conn net.Conn) (ldapserver.LD
 		log.Printf("Bind request for user %s failed", bindDN)
 		return ldapserver.LDAPResultInvalidCredentials, err
 	}
+	log.Printf("User %s is authorized\n", bindDN)
 	return ldapserver.LDAPResultSuccess, nil
 }
 
@@ -78,6 +80,7 @@ func (s *Server) Search(boundDN string, req ldapserver.SearchRequest, conn net.C
 	defer s.ClientPool.PutConn(cc)
 	err = s.ClientPool.BindCredentials(cc)
 	if err != nil {
+		log.Printf("Bind request for deafult user failed")
 		return ldapserver.ServerSearchResult{
 			ResultCode: ldapserver.LDAPResultInvalidCredentials,
 		}, err
