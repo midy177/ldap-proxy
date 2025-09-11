@@ -47,8 +47,21 @@ func (s *Server) Bind(bindDN, bindSimplePw string, conn net.Conn) (ldapserver.LD
 	if bindDN == s.Username && bindSimplePw == s.Password {
 		return ldapserver.LDAPResultSuccess, nil
 	}
-	log.Printf("Bind request for user %s failed", s.Username)
-	return ldapserver.LDAPResultInvalidCredentials, nil
+	// 1) 取上游连接
+	cc, err := s.ClientPool.GetConn()
+	if err != nil {
+		log.Printf("Error getting client connection: %v\n", err)
+		return ldapserver.LDAPResultInvalidCredentials, err
+	}
+	// 归还到连接池
+	defer s.ClientPool.PutConn(cc)
+
+	err = cc.Bind(bindDN, bindSimplePw)
+	if err != nil {
+		log.Printf("Bind request for user %s failed", bindDN)
+		return ldapserver.LDAPResultInvalidCredentials, err
+	}
+	return ldapserver.LDAPResultSuccess, nil
 }
 
 // Search 接口：把请求转发到上游 LDAP（使用 go-ldap/ldap/v3 客户端）
@@ -63,6 +76,12 @@ func (s *Server) Search(boundDN string, req ldapserver.SearchRequest, conn net.C
 	}
 	// 归还到连接池
 	defer s.ClientPool.PutConn(cc)
+	err = s.ClientPool.BindCredentials(cc)
+	if err != nil {
+		return ldapserver.ServerSearchResult{
+			ResultCode: ldapserver.LDAPResultInvalidCredentials,
+		}, err
+	}
 
 	// 2) 将 scope/deref/limit 等从 server 映射到 v3
 	scope := req.Scope

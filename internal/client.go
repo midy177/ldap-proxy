@@ -59,3 +59,10 @@ func (c *ClientPool) newConn() (*ldap.Conn, error) {
 	}
 	return conn, nil
 }
+func (c *ClientPool) BindCredentials(conn *ldap.Conn) error {
+	err := conn.Bind(c.bindDN, c.bindPassword)
+	if err != nil {
+		conn.Close()
+	}
+	return err
+}
