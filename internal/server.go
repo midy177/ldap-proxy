@@ -175,6 +175,7 @@ func (s *Server) Search(boundDN string, req ldapserver.SearchRequest, conn net.C
 		}
 		out.Entries = append(out.Entries, entry)
 		if onlyOne {
+			log.Printf("match only one rule")
 			break
 		}
 	}
