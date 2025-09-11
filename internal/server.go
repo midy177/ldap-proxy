@@ -120,7 +120,7 @@ func (s *Server) Search(boundDN string, req ldapserver.SearchRequest, conn net.C
 	}
 
 	if GetRunMode() {
-		log.Printf("BaseDN %s Filter %s with %v attributes", req.BaseDN, req.Filter, len(attrs))
+		log.Printf("BaseDN %s Filter %s with %v attributes", req.BaseDN, req.Filter, attrs)
 	}
 
 	// 3) 构造 v3 的 SearchRequest
