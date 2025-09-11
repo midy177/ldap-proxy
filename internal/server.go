@@ -45,13 +45,13 @@ func newServer(cp *ClientPool, sanr *SwapAttributeNameRule, user, pass, appendAt
 // Bind 接口：验证简单用户名/密码
 func (s *Server) Bind(bindDN, bindSimplePw string, conn net.Conn) (ldapserver.LDAPResultCode, error) {
 	if bindDN == s.Username && bindSimplePw == s.Password {
-		log.Printf("LDAP User %s is authorized\n", s.Username)
+		log.Printf("LDAP User %s is authorized", s.Username)
 		return ldapserver.LDAPResultSuccess, nil
 	}
 	// 1) 取上游连接
 	cc, err := s.ClientPool.GetConn()
 	if err != nil {
-		log.Printf("Error getting client connection: %v\n", err)
+		log.Printf("Error getting client connection: %v", err)
 		return ldapserver.LDAPResultInvalidCredentials, err
 	}
 	// 归还到连接池
@@ -62,7 +62,7 @@ func (s *Server) Bind(bindDN, bindSimplePw string, conn net.Conn) (ldapserver.LD
 		log.Printf("Bind request for user %s failed", bindDN)
 		return ldapserver.LDAPResultInvalidCredentials, err
 	}
-	log.Printf("User %s is authorized\n", bindDN)
+	log.Printf("User %s is authorized", bindDN)
 	return ldapserver.LDAPResultSuccess, nil
 }
 
@@ -118,6 +118,11 @@ func (s *Server) Search(boundDN string, req ldapserver.SearchRequest, conn net.C
 	for _, attr := range s.AppendAttrs {
 		attrs = append(attrs, attr)
 	}
+
+	if GetRunMode() {
+		log.Printf("BaseDN %s Filter %s with %v attributes", req.BaseDN, req.Filter, len(attrs))
+	}
+
 	// 3) 构造 v3 的 SearchRequest
 	v3req := ldapv3.NewSearchRequest(
 		req.BaseDN, // base DN
@@ -167,5 +172,8 @@ func (s *Server) Search(boundDN string, req ldapserver.SearchRequest, conn net.C
 		out.Entries = append(out.Entries, entry)
 	}
 
+	if GetRunMode() {
+		log.Printf("Search Result Entries lens: %v\n", len(out.Entries))
+	}
 	return out, nil
 }
