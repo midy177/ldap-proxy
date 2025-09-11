@@ -3,6 +3,7 @@ package internal
 import (
 	"log"
 	"net"
+	"regexp"
 	"strings"
 
 	ldapv3 "github.com/go-ldap/ldap/v3"
@@ -152,6 +153,9 @@ func (s *Server) Search(boundDN string, req ldapserver.SearchRequest, conn net.C
 		Referrals:  resp.Referrals,
 		ResultCode: ldapserver.LDAPResultSuccess,
 	}
+	// 跳过 LDAP bug
+	re := regexp.MustCompile(`^\(&\(objectClass=posixAccount\)\(\|(uid=[^()]+|mobile=[^()]+|mail=[^()]+|sAMAccountName=[^()]+)+\)\)$`)
+	onlyOne := re.MatchString(req.Filter)
 	for _, e := range resp.Entries {
 		entry := &ldapserver.Entry{
 			DN: e.DN,
@@ -170,6 +174,9 @@ func (s *Server) Search(boundDN string, req ldapserver.SearchRequest, conn net.C
 			}
 		}
 		out.Entries = append(out.Entries, entry)
+		if onlyOne {
+			break
+		}
 	}
 
 	if GetRunMode() {
