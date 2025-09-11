@@ -3,14 +3,15 @@ package internal
 import (
 	"log"
 	"net"
+	"strings"
 
 	ldapv3 "github.com/go-ldap/ldap/v3"
 	ldapserver "github.com/nmcclain/ldap"
 )
 
-func Serv(cp *ClientPool, sanr *SwapAttributeNameRule, user, pass, addr string) {
+func Serv(cp *ClientPool, sanr *SwapAttributeNameRule, user, pass, attrs, addr string) {
 	s := ldapserver.NewServer()
-	h := newServer(cp, sanr, user, pass)
+	h := newServer(cp, sanr, user, pass, attrs)
 	s.BindFunc("", h)
 	s.SearchFunc("", h)
 	log.Println("LDAP server listening on " + addr)
@@ -20,19 +21,24 @@ func Serv(cp *ClientPool, sanr *SwapAttributeNameRule, user, pass, addr string) 
 }
 
 type Server struct {
-	Username   string
-	Password   string
-	ClientPool *ClientPool
-	SANR       *SwapAttributeNameRule
+	Username    string
+	Password    string
+	AppendAttrs []string
+	ClientPool  *ClientPool
+	SANR        *SwapAttributeNameRule
 }
 
-func newServer(cp *ClientPool, sanr *SwapAttributeNameRule, user, pass string) *Server {
+func newServer(cp *ClientPool, sanr *SwapAttributeNameRule, user, pass, appendAttrs string) *Server {
 	log.Printf("LDAP servUser %s servPass %s\n", user, pass)
+	appendAttrs = strings.TrimSpace(appendAttrs)
+	attrs := strings.Split(appendAttrs, ",")
+	log.Printf("append Attributes %v\n", attrs)
 	return &Server{
-		Username:   user,
-		Password:   pass,
-		ClientPool: cp,
-		SANR:       sanr,
+		Username:    user,
+		Password:    pass,
+		AppendAttrs: attrs,
+		ClientPool:  cp,
+		SANR:        sanr,
 	}
 }
 
@@ -87,7 +93,9 @@ func (s *Server) Search(boundDN string, req ldapserver.SearchRequest, conn net.C
 	timeLimit := req.TimeLimit
 	typesOnly := req.TypesOnly
 	attrs := req.Attributes
-
+	for _, attr := range s.AppendAttrs {
+		attrs = append(attrs, attr)
+	}
 	// 3) 构造 v3 的 SearchRequest
 	v3req := ldapv3.NewSearchRequest(
 		req.BaseDN, // base DN

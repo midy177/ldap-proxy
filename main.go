@@ -15,6 +15,7 @@ func main() {
 	servUser := flag.String("servUser", "admin", "LDAP server username")
 	servPass := flag.String("servPass", "admin", "LDAP server password")
 	servAddr := flag.String("servAddr", "0.0.0.0:389", "LDAP server address")
+	appendAttrs := flag.String("appendAttrs", "description", "Append LDAP attributes, Comma separated")
 	flag.Parse()
 	cp := internal.NewClientPool(
 		*ldapURL,
@@ -23,5 +24,5 @@ func main() {
 		*poolSize,
 	)
 	sanr := internal.NewSwapAttributeNameRule(*sanrStr)
-	internal.Serv(cp, sanr, *servUser, *servPass, *servAddr)
+	internal.Serv(cp, sanr, *servUser, *servPass, *appendAttrs, *servAddr)
 }
