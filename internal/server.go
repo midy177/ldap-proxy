@@ -160,8 +160,9 @@ func (s *Server) Search(boundDN string, req ldapserver.SearchRequest, conn net.C
 		entry := &ldapserver.Entry{
 			DN: e.DN,
 		}
+		attrsLength := len(e.Attributes)
 		for _, a := range e.Attributes {
-			if name := s.SANR.AfterSwapName(a.Name); name != "" {
+			if name := s.SANR.AfterSwapName(a.Name); name != "" && attrsLength != 1 {
 				entry.Attributes = append(entry.Attributes, &ldapserver.EntryAttribute{
 					Name:   name,
 					Values: a.Values,
