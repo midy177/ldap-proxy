@@ -70,7 +70,6 @@ func (s *ServerHandler) GetLdapClientBySuffixDN(dn string) *LdapClient {
 			return ldapClient
 		}
 	}
-	log.Printf("Can't get ClientPool By Suffix DN: %s", dn)
 	return nil
 }
 
@@ -84,6 +83,7 @@ func (s *ServerHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (ldapse
 	// 1) 取上游连接
 	ldapClient := s.GetLdapClientBySuffixDN(bindDN)
 	if ldapClient == nil {
+		log.Printf("Can't get ClientPool By Suffix DN: %s to do Bind", bindDN)
 		return ldapserver.LDAPResultInvalidCredentials, nil
 	}
 	cc, err := ldapClient.ClientPool.GetConn()
@@ -109,8 +109,9 @@ func (s *ServerHandler) Search(boundDN string, req ldapserver.SearchRequest, con
 	// 1) 取上游连接
 	ldapClient := s.GetLdapClientBySuffixDN(req.BaseDN)
 	if ldapClient == nil {
+		log.Printf("Can't get ClientPool By Suffix DN: %s to do Search", req.BaseDN)
 		return ldapserver.ServerSearchResult{
-			ResultCode: ldapserver.LDAPResultInvalidCredentials,
+			ResultCode: ldapserver.LDAPResultSuccess,
 		}, nil
 	}
 
@@ -118,8 +119,8 @@ func (s *ServerHandler) Search(boundDN string, req ldapserver.SearchRequest, con
 	if err != nil {
 		log.Printf("Error getting client connection: %v\n", err)
 		return ldapserver.ServerSearchResult{
-			ResultCode: ldapserver.LDAPResultOperationsError,
-		}, err
+			ResultCode: ldapserver.LDAPResultSuccess,
+		}, nil
 	}
 	// 归还到连接池
 	defer ldapClient.ClientPool.PutConn(cc)
@@ -127,8 +128,8 @@ func (s *ServerHandler) Search(boundDN string, req ldapserver.SearchRequest, con
 	if err != nil {
 		log.Printf("Bind request for deafult user failed")
 		return ldapserver.ServerSearchResult{
-			ResultCode: ldapserver.LDAPResultInvalidCredentials,
-		}, err
+			ResultCode: ldapserver.LDAPResultSuccess,
+		}, nil
 	}
 	// 2) 将 scope/deref/limit 等从 server 映射到 v3
 	scope := req.Scope
@@ -191,8 +192,8 @@ func (s *ServerHandler) Search(boundDN string, req ldapserver.SearchRequest, con
 		log.Printf("Search Error: %v\n", err)
 		log.Println(req.BaseDN)
 		return ldapserver.ServerSearchResult{
-			ResultCode: ldapserver.LDAPResultOperationsError,
-		}, err
+			ResultCode: ldapserver.LDAPResultSuccess,
+		}, nil
 	}
 
 	// 5) 把 v3 的结果映射回 server 的返回类型
