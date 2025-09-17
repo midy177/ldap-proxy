@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	ber "github.com/go-asn1-ber/asn1-ber"
 	ldapv3 "github.com/go-ldap/ldap/v3"
 	ldapserver "github.com/nmcclain/ldap"
 )
@@ -124,7 +125,6 @@ func (s *ServerHandler) Search(boundDN string, req ldapserver.SearchRequest, con
 			ResultCode: ldapserver.LDAPResultInvalidCredentials,
 		}, err
 	}
-
 	// 2) 将 scope/deref/limit 等从 server 映射到 v3
 	scope := req.Scope
 	var v3scope int
@@ -133,6 +133,8 @@ func (s *ServerHandler) Search(boundDN string, req ldapserver.SearchRequest, con
 		v3scope = ldapv3.ScopeBaseObject
 	case 1: // SingleLevel
 		v3scope = ldapv3.ScopeSingleLevel
+	case 3: // Children
+		v3scope = ldapv3.ScopeChildren
 	default: // WholeSubtree
 		v3scope = ldapv3.ScopeWholeSubtree
 	}
@@ -157,9 +159,9 @@ func (s *ServerHandler) Search(boundDN string, req ldapserver.SearchRequest, con
 	for _, attr := range ldapClient.ExtraAttributes {
 		attrs = append(attrs, attr)
 	}
-
+	filter := RewriteOrToAnd(req.Filter)
 	if GetRunMode() {
-		log.Printf("BaseDN %s Filter %s with %v attributes", req.BaseDN, req.Filter, attrs)
+		log.Printf("BaseDN %s Source Filter %s Rewrite Filter %s with %v attributes", req.BaseDN, req.Filter, filter, attrs)
 	}
 
 	// 3) 构造 v3 的 SearchRequest
@@ -170,7 +172,7 @@ func (s *ServerHandler) Search(boundDN string, req ldapserver.SearchRequest, con
 		sizeLimit,  // size limit
 		timeLimit,  // time limit
 		typesOnly,  // types only
-		req.Filter, // filter 字符串
+		filter,     // filter 字符串
 		attrs,      // attributes
 		nil,        // controls
 	)
@@ -223,4 +225,30 @@ func (s *ServerHandler) Search(boundDN string, req ldapserver.SearchRequest, con
 	}
 
 	return out, nil
+}
+
+func RewriteOrToAnd(filter string) string {
+	pkt, err := ldapv3.CompileFilter(filter)
+	if err != nil {
+		log.Printf("Error compile filter: %v", err)
+		return filter
+	}
+	rewrite(pkt)
+	out, err := ldapv3.DecompileFilter(pkt)
+	if err != nil {
+		log.Printf("Error decompile filter: %v", err)
+		return filter
+	}
+	return out
+}
+
+// 递归把所有 OR 节点（context-specific tag=1）替换成 AND（tag=0）
+func rewrite(p *ber.Packet) {
+	// OR -> AND
+	if p.ClassType == ber.ClassContext && int(p.Tag) == 1 {
+		p.Tag = 0 // AND 的 tag
+	}
+	for _, c := range p.Children {
+		rewrite(c)
+	}
 }
