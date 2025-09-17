@@ -76,6 +76,7 @@ func (s *ServerHandler) GetLdapClientBySuffixDN(dn string) *LdapClient {
 
 // Bind 接口：验证简单用户名/密码
 func (s *ServerHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (ldapserver.LDAPResultCode, error) {
+	log.Printf("Bind Client: %s", bindDN)
 	if bindDN == s.Username && bindSimplePw == s.Password {
 		log.Printf("LDAP User %s is authorized", s.Username)
 		return ldapserver.LDAPResultSuccess, nil
@@ -104,6 +105,7 @@ func (s *ServerHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (ldapse
 
 // Search 接口：把请求转发到上游 LDAP（使用 go-ldap/ldap/v3 客户端）
 func (s *ServerHandler) Search(boundDN string, req ldapserver.SearchRequest, conn net.Conn) (ldapserver.ServerSearchResult, error) {
+	log.Printf("Search Client: %s,baseDN: %s", boundDN, req.BaseDN)
 	// 1) 取上游连接
 	ldapClient := s.GetLdapClientBySuffixDN(req.BaseDN)
 	if ldapClient == nil {

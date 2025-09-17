@@ -9,17 +9,10 @@ ldapConfig:
     bindPW:
     insecureSkipVerify:
     clientPoolSize: 10
+    rewriteOrToAnd: true
     swapAttributeNameRule:
       - displayName<->description
     extraAttributes:
       - description
-  - suffixDN:
-    ldapURL:
-    bindDN:
-    bindPW:
-    insecureSkipVerify:
-    clientPoolSize: 10
-    swapAttributeNameRule:
-      - displayName<->description
-    extraAttributes:
-      - description
+    excludeFilterKeys:
+      -
