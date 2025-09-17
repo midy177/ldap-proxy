@@ -2,12 +2,12 @@ package internal
 
 import (
 	"ldap-proxy/config"
+	"ldap-proxy/utils"
 	"log"
 	"net"
 	"regexp"
 	"strings"
 
-	ber "github.com/go-asn1-ber/asn1-ber"
 	ldapv3 "github.com/go-ldap/ldap/v3"
 	ldapserver "github.com/nmcclain/ldap"
 )
@@ -33,6 +33,7 @@ func Serv(f string) {
 		sanr := NewSwapAttributeNameRule(ldapConfig.SwapAttributeNameRule...)
 		sh.ClientPools[ldapConfig.SuffixDN] = &LdapClient{
 			ExtraAttributes:       ldapConfig.ExtraAttributes,
+			ExcludeFilterKeys:     ldapConfig.ExcludeFilterKeys,
 			SwapAttributeNameRule: sanr,
 			ClientPool:            cp,
 		}
@@ -49,6 +50,7 @@ func Serv(f string) {
 
 type LdapClient struct {
 	ExtraAttributes       []string
+	ExcludeFilterKeys     []string
 	SwapAttributeNameRule *SwapAttributeNameRule
 	ClientPool            *ClientPool
 }
@@ -159,7 +161,7 @@ func (s *ServerHandler) Search(boundDN string, req ldapserver.SearchRequest, con
 	for _, attr := range ldapClient.ExtraAttributes {
 		attrs = append(attrs, attr)
 	}
-	filter := RewriteOrToAnd(req.Filter)
+	filter := dropAttrsFromFilter(req.Filter, ldapClient.ExcludeFilterKeys)
 	if GetRunMode() {
 		log.Printf("BaseDN %s Source Filter %s Rewrite Filter %s with %v attributes", req.BaseDN, req.Filter, filter, attrs)
 	}
@@ -227,28 +229,11 @@ func (s *ServerHandler) Search(boundDN string, req ldapserver.SearchRequest, con
 	return out, nil
 }
 
-func RewriteOrToAnd(filter string) string {
-	pkt, err := ldapv3.CompileFilter(filter)
+func dropAttrsFromFilter(filter string, dropAttrs []string) string {
+	fromFilter, err := utils.DropAttrsFromFilter(filter, dropAttrs)
 	if err != nil {
-		log.Printf("Error compile filter: %v", err)
+		log.Printf("Drop Attributes Error: %v\n", err)
 		return filter
 	}
-	rewrite(pkt)
-	out, err := ldapv3.DecompileFilter(pkt)
-	if err != nil {
-		log.Printf("Error decompile filter: %v", err)
-		return filter
-	}
-	return out
-}
-
-// 递归把所有 OR 节点（context-specific tag=1）替换成 AND（tag=0）
-func rewrite(p *ber.Packet) {
-	// OR -> AND
-	if p.ClassType == ber.ClassContext && int(p.Tag) == 1 {
-		p.Tag = 0 // AND 的 tag
-	}
-	for _, c := range p.Children {
-		rewrite(c)
-	}
+	return fromFilter
 }

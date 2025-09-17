@@ -23,6 +23,7 @@ type LdapConfig struct {
 	ClientPoolSize        int      `yaml:"clientPoolSize"`
 	SwapAttributeNameRule []string `yaml:"swapAttributeNameRule"`
 	ExtraAttributes       []string `yaml:"extraAttributes"`
+	ExcludeFilterKeys     []string `yaml:"excludeFilterKeys"`
 }
 
 func ParseConfig(f string) (*Config, error) {
