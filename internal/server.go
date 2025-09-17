@@ -229,6 +229,9 @@ func (s *ServerHandler) Search(boundDN string, req ldapserver.SearchRequest, con
 }
 
 func dropAttrsFromFilter(filter string, dropAttrs []string) string {
+	if dropAttrs == nil && len(dropAttrs) == 0 {
+		return filter
+	}
 	fromFilter, err := utils.DropAttrsFromFilter(filter, dropAttrs)
 	if err != nil {
 		log.Printf("Drop Attributes Error: %v\n", err)
