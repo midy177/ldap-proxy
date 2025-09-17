@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"ldap-proxy/config"
 	"log"
 	"net"
 	"regexp"
@@ -10,53 +11,83 @@ import (
 	ldapserver "github.com/nmcclain/ldap"
 )
 
-func Serv(cp *ClientPool, sanr *SwapAttributeNameRule, user, pass, attrs, addr string) {
+func Serv(f string) {
+	cfg, err := config.ParseConfig(f)
+	if err != nil {
+		log.Fatalf("Error parsing config: %v", err)
+	}
+	SetRunMode(cfg.Debug)
+	sh := &ServerHandler{
+		Username:    cfg.ServUser,
+		Password:    cfg.ServPass,
+		ClientPools: make(map[string]*LdapClient),
+	}
+	for _, ldapConfig := range cfg.LdapConfig {
+		cp := NewClientPool(
+			ldapConfig.LdapURL,
+			ldapConfig.BindDN,
+			ldapConfig.BindPW, ldapConfig.InsecureSkipVerify,
+			ldapConfig.ClientPoolSize,
+		)
+		sanr := NewSwapAttributeNameRule(ldapConfig.SwapAttributeNameRule...)
+		sh.ClientPools[ldapConfig.SuffixDN] = &LdapClient{
+			ExtraAttributes:       ldapConfig.ExtraAttributes,
+			SwapAttributeNameRule: sanr,
+			ClientPool:            cp,
+		}
+	}
+
 	s := ldapserver.NewServer()
-	h := newServer(cp, sanr, user, pass, attrs)
-	s.BindFunc("", h)
-	s.SearchFunc("", h)
-	log.Println("LDAP server listening on " + addr)
-	if err := s.ListenAndServe(addr); err != nil {
+	s.BindFunc("", sh)
+	s.SearchFunc("", sh)
+	log.Println("LDAP server listening on " + cfg.ServAddr)
+	if err := s.ListenAndServe(cfg.ServAddr); err != nil {
 		log.Fatalf("LDAP Server Failed: %s", err.Error())
 	}
 }
 
-type Server struct {
-	Username    string
-	Password    string
-	AppendAttrs []string
-	ClientPool  *ClientPool
-	SANR        *SwapAttributeNameRule
+type LdapClient struct {
+	ExtraAttributes       []string
+	SwapAttributeNameRule *SwapAttributeNameRule
+	ClientPool            *ClientPool
 }
 
-func newServer(cp *ClientPool, sanr *SwapAttributeNameRule, user, pass, appendAttrs string) *Server {
-	log.Printf("LDAP servUser %s servPass %s\n", user, pass)
-	appendAttrs = strings.TrimSpace(appendAttrs)
-	attrs := strings.Split(appendAttrs, ",")
-	log.Printf("append Attributes %v\n", attrs)
-	return &Server{
-		Username:    user,
-		Password:    pass,
-		AppendAttrs: attrs,
-		ClientPool:  cp,
-		SANR:        sanr,
+type ServerHandler struct {
+	Username    string
+	Password    string
+	ClientPools map[string]*LdapClient
+}
+
+func (s *ServerHandler) GetLdapClientBySuffixDN(dn string) *LdapClient {
+	for suffix, ldapClient := range s.ClientPools {
+		if strings.HasSuffix(dn, suffix) {
+			// 命中
+			log.Printf("Get ClientPool By Suffix DN: %s", dn)
+			return ldapClient
+		}
 	}
+	log.Printf("Can't get ClientPool By Suffix DN: %s", dn)
+	return nil
 }
 
 // Bind 接口：验证简单用户名/密码
-func (s *Server) Bind(bindDN, bindSimplePw string, conn net.Conn) (ldapserver.LDAPResultCode, error) {
+func (s *ServerHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (ldapserver.LDAPResultCode, error) {
 	if bindDN == s.Username && bindSimplePw == s.Password {
 		log.Printf("LDAP User %s is authorized", s.Username)
 		return ldapserver.LDAPResultSuccess, nil
 	}
 	// 1) 取上游连接
-	cc, err := s.ClientPool.GetConn()
+	ldapClient := s.GetLdapClientBySuffixDN(bindDN)
+	if ldapClient == nil {
+		return ldapserver.LDAPResultInvalidCredentials, nil
+	}
+	cc, err := ldapClient.ClientPool.GetConn()
 	if err != nil {
 		log.Printf("Error getting client connection: %v", err)
 		return ldapserver.LDAPResultInvalidCredentials, err
 	}
 	// 归还到连接池
-	defer s.ClientPool.PutConn(cc)
+	defer ldapClient.ClientPool.PutConn(cc)
 
 	err = cc.Bind(bindDN, bindSimplePw)
 	if err != nil {
@@ -68,9 +99,16 @@ func (s *Server) Bind(bindDN, bindSimplePw string, conn net.Conn) (ldapserver.LD
 }
 
 // Search 接口：把请求转发到上游 LDAP（使用 go-ldap/ldap/v3 客户端）
-func (s *Server) Search(boundDN string, req ldapserver.SearchRequest, conn net.Conn) (ldapserver.ServerSearchResult, error) {
+func (s *ServerHandler) Search(boundDN string, req ldapserver.SearchRequest, conn net.Conn) (ldapserver.ServerSearchResult, error) {
 	// 1) 取上游连接
-	cc, err := s.ClientPool.GetConn()
+	ldapClient := s.GetLdapClientBySuffixDN(req.BaseDN)
+	if ldapClient == nil {
+		return ldapserver.ServerSearchResult{
+			ResultCode: ldapserver.LDAPResultInvalidCredentials,
+		}, nil
+	}
+
+	cc, err := ldapClient.ClientPool.GetConn()
 	if err != nil {
 		log.Printf("Error getting client connection: %v\n", err)
 		return ldapserver.ServerSearchResult{
@@ -78,8 +116,8 @@ func (s *Server) Search(boundDN string, req ldapserver.SearchRequest, conn net.C
 		}, err
 	}
 	// 归还到连接池
-	defer s.ClientPool.PutConn(cc)
-	err = s.ClientPool.BindCredentials(cc)
+	defer ldapClient.ClientPool.PutConn(cc)
+	err = ldapClient.ClientPool.BindCredentials(cc)
 	if err != nil {
 		log.Printf("Bind request for deafult user failed")
 		return ldapserver.ServerSearchResult{
@@ -116,7 +154,7 @@ func (s *Server) Search(boundDN string, req ldapserver.SearchRequest, conn net.C
 	timeLimit := req.TimeLimit
 	typesOnly := req.TypesOnly
 	attrs := req.Attributes
-	for _, attr := range s.AppendAttrs {
+	for _, attr := range ldapClient.ExtraAttributes {
 		attrs = append(attrs, attr)
 	}
 
@@ -165,7 +203,7 @@ func (s *Server) Search(boundDN string, req ldapserver.SearchRequest, conn net.C
 		}
 		attrsLength := len(e.Attributes)
 		for _, a := range e.Attributes {
-			if name := s.SANR.AfterSwapName(a.Name); name != "" && attrsLength != 1 {
+			if name := ldapClient.SwapAttributeNameRule.AfterSwapName(a.Name); name != "" && attrsLength != 1 {
 				entry.Attributes = append(entry.Attributes, &ldapserver.EntryAttribute{
 					Name:   name,
 					Values: a.Values,

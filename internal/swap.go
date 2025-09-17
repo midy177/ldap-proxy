@@ -10,9 +10,7 @@ type SwapAttributeNameRule struct {
 }
 
 // NewSwapAttributeNameRule ,对调name name1<->name2;name5<->name6
-func NewSwapAttributeNameRule(rule string) *SwapAttributeNameRule {
-	rule = strings.TrimSpace(rule)
-	rules := strings.Split(rule, ";")
+func NewSwapAttributeNameRule(rules ...string) *SwapAttributeNameRule {
 	sanr := make(map[string]string)
 	for _, r := range rules {
 		swapRule := strings.Split(r, "<->")

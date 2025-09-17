@@ -1,0 +1,25 @@
+servAddr: 0.0.0.0:389
+servUser: admin
+servPass: mo7Ga775UdzKrpf4
+debug: true
+ldapConfig:
+  - suffixDN:
+    ldapURL:
+    bindDN:
+    bindPW:
+    insecureSkipVerify:
+    clientPoolSize: 10
+    swapAttributeNameRule:
+      - displayName<->description
+    extraAttributes:
+      - description
+  - suffixDN:
+    ldapURL:
+    bindDN:
+    bindPW:
+    insecureSkipVerify:
+    clientPoolSize: 10
+    swapAttributeNameRule:
+      - displayName<->description
+    extraAttributes:
+      - description

@@ -5,6 +5,7 @@ go 1.25.1
 require (
 	github.com/go-ldap/ldap/v3 v3.4.11
 	github.com/nmcclain/ldap v0.0.0-20210720162743-7f8d1e44eeba
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
