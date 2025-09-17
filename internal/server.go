@@ -5,7 +5,6 @@ import (
 	"ldap-proxy/utils"
 	"log"
 	"net"
-	"regexp"
 	"strings"
 
 	ldapv3 "github.com/go-ldap/ldap/v3"
@@ -34,6 +33,7 @@ func Serv(f string) {
 		sh.ClientPools[ldapConfig.SuffixDN] = &LdapClient{
 			ExtraAttributes:       ldapConfig.ExtraAttributes,
 			ExcludeFilterKeys:     ldapConfig.ExcludeFilterKeys,
+			RewriteOrToAnd:        ldapConfig.RewriteOrToAnd,
 			SwapAttributeNameRule: sanr,
 			ClientPool:            cp,
 		}
@@ -51,6 +51,7 @@ func Serv(f string) {
 type LdapClient struct {
 	ExtraAttributes       []string
 	ExcludeFilterKeys     []string
+	RewriteOrToAnd        bool
 	SwapAttributeNameRule *SwapAttributeNameRule
 	ClientPool            *ClientPool
 }
@@ -162,6 +163,9 @@ func (s *ServerHandler) Search(boundDN string, req ldapserver.SearchRequest, con
 		attrs = append(attrs, attr)
 	}
 	filter := dropAttrsFromFilter(req.Filter, ldapClient.ExcludeFilterKeys)
+	if ldapClient.RewriteOrToAnd {
+		filter = rewriteOrToAnd(filter)
+	}
 	if GetRunMode() {
 		log.Printf("BaseDN %s Source Filter %s Rewrite Filter %s with %v attributes", req.BaseDN, req.Filter, filter, attrs)
 	}
@@ -195,9 +199,6 @@ func (s *ServerHandler) Search(boundDN string, req ldapserver.SearchRequest, con
 		Referrals:  resp.Referrals,
 		ResultCode: ldapserver.LDAPResultSuccess,
 	}
-	// 跳过 LDAP bug
-	re := regexp.MustCompile(`^\(&\(objectClass=posixAccount\)\(\|(uid=[^()]+|mobile=[^()]+|mail=[^()]+|sAMAccountName=[^()]+)+\)\)$`)
-	onlyOne := re.MatchString(req.Filter)
 	if GetRunMode() {
 		log.Printf("Search Result Entries lens: %v\n", len(resp.Entries))
 	}
@@ -220,10 +221,6 @@ func (s *ServerHandler) Search(boundDN string, req ldapserver.SearchRequest, con
 			}
 		}
 		out.Entries = append(out.Entries, entry)
-		if onlyOne {
-			log.Printf("match only one rule")
-			break
-		}
 	}
 
 	return out, nil
@@ -236,4 +233,13 @@ func dropAttrsFromFilter(filter string, dropAttrs []string) string {
 		return filter
 	}
 	return fromFilter
+}
+
+func rewriteOrToAnd(filter string) string {
+	out, err := utils.RewriteOrToAnd(filter)
+	if err != nil {
+		log.Printf("Rewrite Error: %v\n", err)
+		return filter
+	}
+	return out
 }

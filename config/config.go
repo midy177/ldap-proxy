@@ -21,6 +21,7 @@ type LdapConfig struct {
 	BindPW                string   `yaml:"bindPW"`
 	InsecureSkipVerify    bool     `yaml:"insecureSkipVerify"`
 	ClientPoolSize        int      `yaml:"clientPoolSize"`
+	RewriteOrToAnd        bool     `yaml:"rewriteOrToAnd"`
 	SwapAttributeNameRule []string `yaml:"swapAttributeNameRule"`
 	ExtraAttributes       []string `yaml:"extraAttributes"`
 	ExcludeFilterKeys     []string `yaml:"excludeFilterKeys"`

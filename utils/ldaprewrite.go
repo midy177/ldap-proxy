@@ -129,3 +129,28 @@ func attrFromNode(p *ber.Packet) (string, bool) {
 	}
 	return "", false
 }
+
+func RewriteOrToAnd(filter string) (string, error) {
+	pkt, err := ldap.CompileFilter(filter)
+	if err != nil {
+		return "", fmt.Errorf("compile filter: %w", err)
+	}
+	rewrite(pkt)
+	out, err := ldap.DecompileFilter(pkt)
+	if err != nil {
+		return "", fmt.Errorf("decompile filter: %w", err)
+	}
+	return out, nil
+}
+
+// 递归把所有 OR 节点（context-specific tag=1）替换成 AND（tag=0）
+func rewrite(p *ber.Packet) {
+	// OR -> AND
+	if p.ClassType == ber.ClassContext && int(p.Tag) == 1 {
+		p.Tag = 0 // AND 的 tag
+	}
+
+	for _, c := range p.Children {
+		rewrite(c)
+	}
+}
